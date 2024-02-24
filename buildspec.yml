@@ -10,7 +10,7 @@ phases:
     commands:
       - echo Build completed on `date`
       - cp appspec.yml build/
-      - cp scripts/* build/
+      - cp script/* build/
 artifacts:
   files: '**/*'
   discard-paths: yes
