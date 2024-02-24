@@ -9,6 +9,8 @@ phases:
   post_build:
     commands:
       - echo Build completed on `date`
+      - cp appspec.yml build/
+      - cp scripts/* build/
 artifacts:
   files: '**/*'
   discard-paths: yes
