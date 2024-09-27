@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sakarltech SoundWave: Voice Recorder with Effects</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: limegreen; /* Change background color */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            height: 100vh;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            color: darkblue;
+        }
+
+        p {
+            margin-bottom: 30px;
+            font-size: 18px;
+            color: darkslategray;
+            text-align: center;
+        }
+
+        .recorder-container {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            text-align: center;
+            width: 400px;
+        }
+
+        .recorder-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            background-color: darkblue;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: lightgray;
+        }
+
+        .recordings-list {
+            margin-top: 20px;
+        }
+
+        .recording-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .recording-name {
+            flex-grow: 1;
+        }
+
+        audio {
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .effects {
+            margin-top: 20px;
+        }
+
+        select {
+            padding: 10px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SoundWave: Voice Recorder</h1>
+    <p>A place where people can record their voice and apply sound effects to hear how they sound.</p>
+
+    <div class="recorder-container">
+        <!-- Recorder Controls -->
+        <div class="recorder-controls">
+            <button id="recordBtn">Record</button>
+            <button id="stopBtn" disabled>Stop</button>
+        </div>
+
+        <!-- Audio Effects -->
+        <div class="effects">
+            <label for="effectsSelect">Apply Sound Effect:</label>
+            <select id="effectsSelect">
+                <option value="none">None</option>
+                <option value="robot">Robot</option>
+                <option value="echo">Echo</option>
+                <option value="chipmunk">Chipmunk</option>
+            </select>
+        </div>
+
+        <!-- List of Recordings -->
+        <div class="recordings-list" id="recordingsList">
+            <h2>Recordings</h2>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordings = [];
+        let recordingCount = 0;
+
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const recordingsList = document.getElementById('recordingsList');
+        const effectsSelect = document.getElementById('effectsSelect');
+
+        // Web Audio API context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        recordBtn.addEventListener('click', startRecording);
+        stopBtn.addEventListener('click', stopRecording);
+
+        // Start recording
+        function startRecording() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(function (stream) {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.start();
+
+                        mediaRecorder.ondataavailable = function (event) {
+                            audioChunks.push(event.data);
+                        };
+
+                        mediaRecorder.onstop = function () {
+                            const audioBlob = new Blob(audioChunks, { 'type': 'audio/ogg; codecs=opus' });
+                            const audioURL = URL.createObjectURL(audioBlob);
+                            const name = `Recording ${++recordingCount}`;
+                            recordings.push({ name, url: audioURL, blob: audioBlob });
+                            audioChunks = [];
+                            updateRecordingsList();
+                        };
+
+                        recordBtn.disabled = true;
+                        stopBtn.disabled = false;
+                    });
+            } else {
+                alert("Your browser doesn't support audio recording.");
+            }
+        }
+
+        // Stop recording
+        function stopRecording() {
+            mediaRecorder.stop();
+            recordBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+
+        // Update the recordings list
+        function updateRecordingsList() {
+            recordingsList.innerHTML = '<h2>Recordings</h2>'; // Reset the list
+
+            recordings.forEach((recording, index) => {
+                const recordingItem = document.createElement('div');
+                recordingItem.classList.add('recording-item');
+
+                const recordingNameInput = document.createElement('input');
+                recordingNameInput.type = 'text';
+                recordingNameInput.value = recording.name;
+                recordingNameInput.classList.add('recording-name');
+                recordingNameInput.onchange = function () {
+                    recordings[index].name = recordingNameInput.value;
+                };
+
+                const playButton = document.createElement('button');
+                playButton.textContent = 'Play';
+                playButton.onclick = function () {
+                    playRecordingWithEffect(recording, effectsSelect.value);
+                };
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+                deleteButton.onclick = function () {
+                    deleteRecording(index);
+                };
+
+                recordingItem.appendChild(recordingNameInput);
+                recordingItem.appendChild(playButton);
+                recordingItem.appendChild(deleteButton);
+                recordingsList.appendChild(recordingItem);
+            });
+        }
+
+        // Delete a specific recording
+        function deleteRecording(index) {
+            recordings.splice(index, 1);
+            updateRecordingsList();
+        }
+
+        // Play recording with the selected sound effect
+        function playRecordingWithEffect(recording, effect) {
+            const audioSource = audioContext.createBufferSource();
+            fetch(recording.url)
+                .then(response => response.arrayBuffer())
+                .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+                .then(audioBuffer => {
+                    audioSource.buffer = audioBuffer;
+
+                    let finalNode = audioSource;
+
+                    // Apply effect based on the user's choice
+                    switch (effect) {
+                        case 'robot':
+                            finalNode = applyRobotEffect(finalNode);
+                            break;
+                        case 'echo':
+                            finalNode = applyEchoEffect(finalNode);
+                            break;
+                        case 'chipmunk':
+                            finalNode = applyChipmunkEffect(finalNode);
+                            break;
+                        default:
+                            break;
+                    }
+
+                    finalNode.connect(audioContext.destination);
+                    audioSource.start();
+                });
+        }
+
+        // Apply robot effect (distortion)
+        function applyRobotEffect(source) {
+            const distortion = audioContext.createWaveShaper();
+            distortion.curve = makeDistortionCurve(400);
+            distortion.oversample = '4x';
+            source.connect(distortion);
+            return distortion;
+        }
+
+        // Apply echo effect (delay)
+        function applyEchoEffect(source) {
+            const delay = audioContext.createDelay(5.0);
+            delay.delayTime.value = 0.25; // 250 ms echo
+            source.connect(delay);
+            delay.connect(audioContext.destination);
+            return delay;
+        }
+
+        // Apply chipmunk effect (pitch shift)
+        function applyChipmunkEffect(source) {
+            const pitchShift = audioContext.createGain();
+            source.playbackRate.value = 1.5; // Higher playback speed for chipmunk effect
+            source.connect(pitchShift);
+            return pitchShift;
+        }
+
+        // Helper function to create distortion curve for robot effect
+        function makeDistortionCurve(amount) {
+            const k = typeof amount === 'number' ? amount : 50;
+            const n_samples = 44100;
+            const curve = new Float32Array(n_samples);
+            const deg = Math.PI / 180;
+            for (let i = 0; i < n_samples; ++i) {
+                const x = (i * 2) / n_samples - 1;
+                curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
+            }
+            return curve;
+        }
+
+    </script>
+</body>
+</html>
